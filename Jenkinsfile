@@ -25,23 +25,8 @@ pipeline {
             steps {
         sh 'echo BRANCH_NAME=$BRANCH_NAME'
         sh 'echo IMAGE_NAME=$IMAGE_NAME'
-        sh 'echo PORT=$PORT'
              }
         }
-
-        // stage('Set Env') {
-        //     steps {
-        //         script {
-        //             if (env.BRANCH_NAME == 'main') {
-        //                 env.PORT = '3000'
-        //                 env.IMAGE_NAME = 'nodemain:v1.0'
-        //             } else {
-        //                 env.PORT = '3001'
-        //                 env.IMAGE_NAME = 'nodedev:v1.0'
-        //             }
-        //         }
-        //     }
-        // }
 
         stage('Install') {
             steps {
@@ -53,7 +38,7 @@ pipeline {
         stage('Test') {
             steps {
                 echo 'Running tests...'
-                sh 'npm test || true'
+                sh 'npm test'
             }
         }
 
@@ -84,6 +69,9 @@ pipeline {
                             echo "Removing old containers for ${IMAGE_NAME}:${IMAGE_TAG}: \$OLD"
                             docker rm -f \$OLD
                         fi
+
+                        # Catch any leftover container with the same name
+                        docker rm -f ${IMAGE_NAME} 2>/dev/null || true
                     """
  
                     // Start the new container immediately after cleanup
@@ -96,6 +84,7 @@ pipeline {
                     """
  
                     echo "Container ${IMAGE_NAME} is running — accessible on port ${HOST_PORT}"
+                }
             }
         }
     }
