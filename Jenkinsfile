@@ -16,7 +16,7 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git 'https://github.com/abuman/epam-jenkins-cicd-pipeline.git'
+                checkout scm
             }
         }
 
