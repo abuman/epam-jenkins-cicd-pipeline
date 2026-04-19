@@ -1,9 +1,9 @@
 pipeline {
     agent any
 
-    tools {
-        nodejs 'NodeJS'
-    }
+    // tools {
+    //     nodejs 'NodeJS'
+    // }
 
     environment {
         // Dynamically set image name and port based on branch
