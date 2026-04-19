@@ -43,7 +43,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $IMAGE_NAME .'
+                sh "docker build -t ${env.IMAGE_NAME} ."
             }
         }
 
@@ -51,8 +51,8 @@ pipeline {
             steps {
                 sh '''
                 # Remove all containers created from this image (ignore if none exist)
-                docker rm -f $(docker ps -aq --filter "ancestor=$IMAGE_NAME") || true
-                docker run -d -p $PORT:$PORT $IMAGE_NAME
+                docker rm -f \$(docker ps -aq --filter "ancestor=${env.IMAGE_NAME}") || true
+                docker run -d -p ${env.PORT}:${env.PORT} ${env.IMAGE_NAME}
                 '''
             }
         }
