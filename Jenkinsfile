@@ -6,9 +6,11 @@ pipeline {
     }
 
     environment {
-        
-        PORT = ''
-        IMAGE_NAME = ''
+        // Dynamically set image name and port based on branch
+        IMAGE_NAME = "${env.BRANCH_NAME == 'main' ? 'nodemain' : 'nodedev'}"
+        IMAGE_TAG  = 'v1.0'
+        HOST_PORT  = "${env.BRANCH_NAME == 'main' ? '3000' : '3001'}"
+        APP_PORT   = '3000'
     }
 
     stages {
@@ -27,46 +29,82 @@ pipeline {
              }
         }
 
-        stage('Set Env') {
-            steps {
-                script {
-                    if (env.BRANCH_NAME == 'main') {
-                        env.PORT = '3000'
-                        env.IMAGE_NAME = 'nodemain:v1.0'
-                    } else {
-                        env.PORT = '3001'
-                        env.IMAGE_NAME = 'nodedev:v1.0'
-                    }
-                }
-            }
-        }
+        // stage('Set Env') {
+        //     steps {
+        //         script {
+        //             if (env.BRANCH_NAME == 'main') {
+        //                 env.PORT = '3000'
+        //                 env.IMAGE_NAME = 'nodemain:v1.0'
+        //             } else {
+        //                 env.PORT = '3001'
+        //                 env.IMAGE_NAME = 'nodedev:v1.0'
+        //             }
+        //         }
+        //     }
+        // }
 
-        stage('Build') {
+        stage('Install') {
             steps {
+                echo "Installing dependencies on branch: ${env.BRANCH_NAME}"
                 sh 'npm install'
             }
         }
 
         stage('Test') {
             steps {
+                echo 'Running tests...'
                 sh 'npm test || true'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${env.IMAGE_NAME} ."
+                echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy Container') {
             steps {
-                sh '''
-                # Remove all containers created from this image (ignore if none exist)
-                docker rm -f \$(docker ps -aq --filter "ancestor=${env.IMAGE_NAME}") || true
-                docker run -d -p ${env.PORT}:${env.PORT} ${env.IMAGE_NAME}
-                '''
+                echo "Deploying ${IMAGE_NAME}:${IMAGE_TAG} on host port ${HOST_PORT}..."
+                script {
+                    // Stop and remove any container using the target host port (minimises downtime)
+                    sh """
+                        # Find and stop any container already bound to the target port
+                        EXISTING=\$(docker ps -q --filter "publish=${HOST_PORT}")
+                        if [ -n "\$EXISTING" ]; then
+                            echo "Stopping container(s) on port ${HOST_PORT}: \$EXISTING"
+                            docker stop \$EXISTING
+                            docker rm -f \$EXISTING
+                        fi
+ 
+                        # Also remove any stopped container with the same image name
+                        OLD=\$(docker ps -aq --filter "ancestor=${IMAGE_NAME}:${IMAGE_TAG}")
+                        if [ -n "\$OLD" ]; then
+                            echo "Removing old containers for ${IMAGE_NAME}:${IMAGE_TAG}: \$OLD"
+                            docker rm -f \$OLD
+                        fi
+                    """
+ 
+                    // Start the new container immediately after cleanup
+                    sh """
+                        docker run -d \
+                            --expose ${APP_PORT} \
+                            -p ${HOST_PORT}:${APP_PORT} \
+                            --name ${IMAGE_NAME} \
+                            ${IMAGE_NAME}:${IMAGE_TAG}
+                    """
+ 
+                    echo "Container ${IMAGE_NAME} is running — accessible on port ${HOST_PORT}"
             }
+        }
+    }
+     post {
+        success {
+            echo "Pipeline succeeded for branch '${env.BRANCH_NAME}'. App is live on port ${HOST_PORT}."
+        }
+        failure {
+            echo "Pipeline FAILED for branch '${env.BRANCH_NAME}'. Check the logs above."
         }
     }
 }
