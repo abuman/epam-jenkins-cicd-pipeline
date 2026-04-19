@@ -1,7 +1,12 @@
 pipeline {
     agent any
 
+    tools {
+        nodejs 'NodeJS'
+    }
+
     environment {
+        
         PORT = ''
         IMAGE_NAME = ''
     }
@@ -14,6 +19,13 @@ pipeline {
             }
         }
 
+        stage('Debug Env') {
+            steps {
+        sh 'echo BRANCH_NAME=$BRANCH_NAME'
+        sh 'echo IMAGE_NAME=$IMAGE_NAME'
+        sh 'echo PORT=$PORT'
+             }
+        }
 
         stage('Set Env') {
             steps {
