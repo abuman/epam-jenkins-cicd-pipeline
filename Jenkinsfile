@@ -1,5 +1,12 @@
 pipeline {
     agent any
+    //         {
+    //     docker {
+    //         image 'node:18-alpine'
+    //         args '-v /var/run/docker.sock:/var/run/docker.sock'
+    //     }
+    // }
+
 
     // tools {
     //     nodejs 'NodeJS'
@@ -11,6 +18,8 @@ pipeline {
         IMAGE_TAG  = 'v1.0'
         HOST_PORT  = "${env.BRANCH_NAME == 'main' ? '3000' : '3001'}"
         APP_PORT   = '3000'
+//        DOCKERHUB_USER = 'albertisac'
+//        DOWNSTREAM_JOB = "${env.BRANCH_NAME == 'main' ? 'Deploy_to_main' : 'Deploy_to_dev'}"
     }
 
     stages {
@@ -27,6 +36,18 @@ pipeline {
         sh 'echo IMAGE_NAME=$IMAGE_NAME'
              }
         }
+
+        // stage('Lint Dockerfile') {
+        //     agent {
+        //         docker {
+        //             image 'hadolint/hadolint:latest-debian'
+        //             reuseNode true
+        //         }
+        //     }
+        //     steps {
+        //         sh 'hadolint Dockerfile'
+        //     }
+        // }
 
         stage('Install') {
             steps {
@@ -46,6 +67,7 @@ pipeline {
             steps {
                 echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
                 sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                //sh "docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
