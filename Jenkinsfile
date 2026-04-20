@@ -56,7 +56,7 @@ pipeline {
                     // Stop and remove any container using the target host port (minimises downtime)
                     sh """
                         # Find and stop any container already bound to the target port
-                        EXISTING=\$(docker ps -q --filter "publish=${HOST_PORT}")
+                        EXISTING=\$(docker ps -q --filter "name=${IMAGE_NAME}")
                         if [ -n "\$EXISTING" ]; then
                             echo "Stopping container(s) on port ${HOST_PORT}: \$EXISTING"
                             docker stop \$EXISTING
