@@ -1,121 +1,72 @@
+@Library('shared-lib') _
+
 pipeline {
-    agent any
-    //         {
-    //     docker {
-    //         image 'node:18-alpine'
-    //         args '-v /var/run/docker.sock:/var/run/docker.sock'
-    //     }
-    // }
-
-
-    // tools {
-    //     nodejs 'NodeJS'
-    // }
+    agent {
+        docker {
+            image 'node:18-alpine'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
     environment {
-        // Dynamically set image name and port based on branch
-        IMAGE_NAME = "${env.BRANCH_NAME == 'main' ? 'nodemain' : 'nodedev'}"
-        IMAGE_TAG  = 'v1.0'
-        HOST_PORT  = "${env.BRANCH_NAME == 'main' ? '3000' : '3001'}"
-        APP_PORT   = '3000'
-//        DOCKERHUB_USER = 'albertisac'
-//        DOWNSTREAM_JOB = "${env.BRANCH_NAME == 'main' ? 'Deploy_to_main' : 'Deploy_to_dev'}"
+        IMAGE_NAME     = "${env.BRANCH_NAME == 'main' ? 'nodemain' : 'nodedev'}"
+        IMAGE_TAG      = 'v1.0'
+        HOST_PORT      = "${env.BRANCH_NAME == 'main' ? '3000' : '3001'}"
+        APP_PORT       = '3000'
+        DOCKERHUB_USER = 'albertisac'
+        DOWNSTREAM_JOB = "${env.BRANCH_NAME == 'main' ? 'Deploy_to_main' : 'Deploy_to_dev'}"
+        FULL_IMAGE     = "${DOCKERHUB_USER}/${IMAGE_NAME}"
     }
 
     stages {
-        stage('Docker Test') {
+
+        stage('Lint Dockerfile') {
             steps {
-        sh 'docker version'
-        sh 'docker ps'
+                script { dockerUtils.lintDockerfile() }
             }
         }
 
-        stage('Debug Env') {
-            steps {
-        sh 'echo BRANCH_NAME=$BRANCH_NAME'
-        sh 'echo IMAGE_NAME=$IMAGE_NAME'
-             }
-        }
-
-        // stage('Lint Dockerfile') {
-        //     agent {
-        //         docker {
-        //             image 'hadolint/hadolint:latest-debian'
-        //             reuseNode true
-        //         }
-        //     }
-        //     steps {
-        //         sh 'hadolint Dockerfile'
-        //     }
-        // }
-
         stage('Install') {
             steps {
-                echo "Installing dependencies on branch: ${env.BRANCH_NAME}"
                 sh 'npm install'
             }
         }
 
         stage('Test') {
             steps {
-                echo 'Running tests...'
                 sh 'npm test'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                //sh "docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG} ."
+                script { dockerUtils.buildImage("${FULL_IMAGE}", "${IMAGE_TAG}") }
             }
         }
 
-        stage('Deploy Container') {
+        stage('Scan Image') {
             steps {
-                echo "Deploying ${IMAGE_NAME}:${IMAGE_TAG} on host port ${HOST_PORT}..."
-                script {
-                    // Stop and remove any container using the target host port (minimises downtime)
-                    sh """
-                        # Find and stop any container already bound to the target port
-                        EXISTING=\$(docker ps -q --filter "name=${IMAGE_NAME}")
-                        if [ -n "\$EXISTING" ]; then
-                            echo "Stopping container(s) on port ${HOST_PORT}: \$EXISTING"
-                            docker stop \$EXISTING
-                            docker rm -f \$EXISTING
-                        fi
- 
-                        # Also remove any stopped container with the same image name
-                        OLD=\$(docker ps -aq --filter "ancestor=${IMAGE_NAME}:${IMAGE_TAG}")
-                        if [ -n "\$OLD" ]; then
-                            echo "Removing old containers for ${IMAGE_NAME}:${IMAGE_TAG}: \$OLD"
-                            docker rm -f \$OLD
-                        fi
+                script { dockerUtils.scanImage("${FULL_IMAGE}:${IMAGE_TAG}") }
+            }
+        }
 
-                        # Catch any leftover container with the same name
-                        docker rm -f ${IMAGE_NAME} 2>/dev/null || true
-                    """
- 
-                    // Start the new container immediately after cleanup
-                    sh """
-                        docker run -d \
-                            --expose ${APP_PORT} \
-                            -p ${HOST_PORT}:${APP_PORT} \
-                            --name ${IMAGE_NAME} \
-                            ${IMAGE_NAME}:${IMAGE_TAG}
-                    """
- 
-                    echo "Container ${IMAGE_NAME} is running — accessible on port ${HOST_PORT}"
-                }
+        stage('Push to Docker Hub') {
+            steps {
+                script { dockerUtils.pushImage("${FULL_IMAGE}", "${IMAGE_TAG}") }
+            }
+        }
+
+        stage('Trigger Deploy') {
+            steps {
+                build job: "${DOWNSTREAM_JOB}",
+                      parameters: [string(name: 'IMAGE_TAG', value: "${IMAGE_TAG}")],
+                      wait: false
             }
         }
     }
-     post {
-        success {
-            echo "Pipeline succeeded for branch '${env.BRANCH_NAME}'. App is live on port ${HOST_PORT}."
-        }
-        failure {
-            echo "Pipeline FAILED for branch '${env.BRANCH_NAME}'. Check the logs above."
-        }
+
+    post {
+        success { echo "Branch '${env.BRANCH_NAME}' built and pushed. Triggered: ${DOWNSTREAM_JOB}" }
+        failure { echo "Pipeline failed on branch '${env.BRANCH_NAME}'" }
     }
 }
