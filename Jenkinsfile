@@ -49,14 +49,6 @@ pipeline {
         }
 
         stage('Build Docker Image') {
-            agent {
-                docker {
-                    // ↓ use an image that has both Node and Docker CLI
-                    image 'docker:24-dind'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
-                    reuseNode true  // ← stays on same workspace, doesn't re-checkout
-                }
-            }
             steps {
                 script { dockerUtils.buildImage("${env.FULL_IMAGE}", "${IMAGE_TAG}") }
             }
