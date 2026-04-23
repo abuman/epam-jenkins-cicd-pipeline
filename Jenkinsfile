@@ -1,12 +1,7 @@
 @Library('shared-lib') _
 
 pipeline {
-    agent {
-        docker {
-            image 'node:18-alpine'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    agent any
 
     environment {
         IMAGE_NAME     = "${env.BRANCH_NAME == 'main' ? 'nodemain' : 'nodedev'}"
@@ -15,10 +10,19 @@ pipeline {
         APP_PORT       = '3000'
         DOCKERHUB_USER = 'albertisac'
         DOWNSTREAM_JOB = "${env.BRANCH_NAME == 'main' ? 'Deploy_to_main' : 'Deploy_to_dev'}"
-        FULL_IMAGE     = "${DOCKERHUB_USER}/${IMAGE_NAME}"
+        //FULL_IMAGE     = "${DOCKERHUB_USER}/${IMAGE_NAME}"
     }
 
     stages {
+
+        stage('Init') {
+            steps {
+                script {
+                    // Safer approach for guaranteed resolve of variable
+                    env.FULL_IMAGE = "${env.DOCKERHUB_USER}/${env.IMAGE_NAME}"
+                }
+            }
+        }
 
         stage('Lint Dockerfile') {
             steps {
@@ -39,20 +43,28 @@ pipeline {
         }
 
         stage('Build Docker Image') {
+            agent {
+                docker {
+                    // ↓ use an image that has both Node and Docker CLI
+                    image 'docker:24-dind'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                    reuseNode true  // ← stays on same workspace, doesn't re-checkout
+                }
+            }
             steps {
-                script { dockerUtils.buildImage("${FULL_IMAGE}", "${IMAGE_TAG}") }
+                script { dockerUtils.buildImage("${env.FULL_IMAGE}", "${IMAGE_TAG}") }
             }
         }
-
+        
         stage('Scan Image') {
             steps {
-                script { dockerUtils.scanImage("${FULL_IMAGE}:${IMAGE_TAG}") }
+                script { dockerUtils.scanImage("${env.FULL_IMAGE}:${IMAGE_TAG}") }
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
-                script { dockerUtils.pushImage("${FULL_IMAGE}", "${IMAGE_TAG}") }
+                script { dockerUtils.pushImage("${env.FULL_IMAGE}", "${IMAGE_TAG}") }
             }
         }
 
