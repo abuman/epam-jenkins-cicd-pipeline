@@ -87,4 +87,5 @@ pipeline {
 //         success { echo "Branch '${env.BRANCH_NAME}' built and pushed. Triggered: ${DOWNSTREAM_JOB}" }
 //         failure { echo "Pipeline failed on branch '${env.BRANCH_NAME}'" }
 //     }
-// }
+    }
+}
